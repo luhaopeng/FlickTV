@@ -15,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusOrder
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -47,6 +49,8 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val playerFocusRequester = remember { FocusRequester() }
+    val nextEpisodeFocusRequester = remember { FocusRequester() }
+    var playerAreaFocused by remember { mutableStateOf(false) }
     var episodeIndex by remember { mutableStateOf(initialEpisodeIndex.coerceIn(line.episodes.indices)) }
     var controls by remember { mutableStateOf(true) }
     var controlsInteractionId by remember { mutableStateOf(0L) }
@@ -57,6 +61,10 @@ fun PlayerScreen(
     var loadProgress by remember { mutableStateOf(0f) }
     var loadAttemptId by remember { mutableStateOf(0L) }
     var loadError by remember { mutableStateOf("") }
+    var pendingSeekTargetMs by remember { mutableStateOf<Long?>(null) }
+    var requestNextEpisodeFocus by remember { mutableStateOf(false) }
+    var nextEpisodeFocused by remember { mutableStateOf(false) }
+    var consumedPlayerKeyCode by remember { mutableStateOf<Int?>(null) }
     val episode = line.episodes[episodeIndex]
 
     val player = remember {
@@ -81,6 +89,7 @@ fun PlayerScreen(
 
     fun prepareCurrent() {
         beginLoading()
+        pendingSeekTargetMs = null
         player.stop()
         val upstream = DefaultHttpDataSource.Factory().setUserAgent(NetworkModule.USER_AGENT).setAllowCrossProtocolRedirects(true)
         val filtering = FilteringDataSource.Factory(upstream)
@@ -91,16 +100,39 @@ fun PlayerScreen(
         player.playWhenReady = true
     }
 
+    fun seekBy(deltaMs: Long) {
+        if (!playerPhase.hasStartedPlayback ||
+            playerPhase.phase == PlayerPhase.ERROR ||
+            playerPhase.phase == PlayerPhase.TIMEOUT
+        ) return
+        val target = accumulateSeekTarget(
+            currentPositionMs = player.currentPosition.coerceAtLeast(0L),
+            pendingTargetMs = pendingSeekTargetMs,
+            deltaMs = deltaMs,
+            durationMs = player.duration.takeIf { it > 0L && it != C.TIME_UNSET } ?: duration
+        )
+        pendingSeekTargetMs = target
+        position = target
+        player.seekTo(target)
+        showControlsForFiveSeconds()
+    }
+
     LaunchedEffect(Unit) {
         playerFocusRequester.requestFocus()
         // 首次进入播放器处于加载态，控制器常驻。
         controls = true
     }
-    LaunchedEffect(controlsInteractionId, playerPhase.phase) {
-        if (controlsInteractionId <= 0L || playerPhase.phase != PlayerPhase.READY) return@LaunchedEffect
+    LaunchedEffect(controls, requestNextEpisodeFocus, episodeIndex) {
+        if (controls && requestNextEpisodeFocus && episodeIndex < line.episodes.lastIndex) {
+            nextEpisodeFocusRequester.requestFocus()
+            requestNextEpisodeFocus = false
+        }
+    }
+    LaunchedEffect(controlsInteractionId, playerPhase.phase, nextEpisodeFocused) {
+        if (controlsInteractionId <= 0L || playerPhase.phase != PlayerPhase.READY || nextEpisodeFocused) return@LaunchedEffect
         val expectedId = controlsInteractionId
         delay(CONTROLS_HIDE_DELAY_MS)
-        if (controlsInteractionId == expectedId && playerPhase.phase == PlayerPhase.READY) controls = false
+        if (controlsInteractionId == expectedId && playerPhase.phase == PlayerPhase.READY && !nextEpisodeFocused) controls = false
     }
     LaunchedEffect(loadAttemptId) {
         if (loadAttemptId <= 0L) return@LaunchedEffect
@@ -172,6 +204,14 @@ fun PlayerScreen(
                 }
             }
 
+            override fun onPositionDiscontinuity(reason: Int) {
+                // SEEK 完成后才清空累积目标；在此之前连续方向键仍在目标位置上继续叠加。
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    position = player.currentPosition.coerceAtLeast(0L)
+                    pendingSeekTargetMs = null
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 playerPhase = playerPhase.onError()
                 loadError = playerErrorMessage(error)
@@ -197,10 +237,27 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(playerFocusRequester)
+            .onFocusChanged { playerAreaFocused = it.isFocused }
+            .focusOrder {
+                if (controls && episodeIndex < line.episodes.lastIndex) down = nextEpisodeFocusRequester
+            }
             .focusable()
             .onPreviewKeyEvent { event ->
-            if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-            when (event.nativeKeyEvent.keyCode) {
+            val native = event.nativeKeyEvent
+            val handledKey = native.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                native.keyCode == KeyEvent.KEYCODE_ENTER ||
+                native.keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+                native.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                native.keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                native.keyCode == KeyEvent.KEYCODE_BACK
+            if (native.action == KeyEvent.ACTION_UP && consumedPlayerKeyCode == native.keyCode) {
+                consumedPlayerKeyCode = null
+                return@onPreviewKeyEvent true
+            }
+            if (!playerAreaFocused || !handledKey) return@onPreviewKeyEvent false
+            if (native.action != KeyEvent.ACTION_DOWN || native.repeatCount != 0) return@onPreviewKeyEvent true
+            consumedPlayerKeyCode = native.keyCode
+            when (native.keyCode) {
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                     if (playerPhase.phase == PlayerPhase.ERROR || playerPhase.phase == PlayerPhase.TIMEOUT) {
                         prepareCurrent()
@@ -212,16 +269,19 @@ fun PlayerScreen(
                     true
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    if (playerPhase.phase == PlayerPhase.READY) {
-                        player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L))
-                        showControlsForFiveSeconds()
-                    }
+                    seekBy(-SEEK_STEP_MS)
                     true
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (playerPhase.phase == PlayerPhase.READY) {
-                        player.seekTo((player.currentPosition + 10_000L).coerceAtMost(player.duration.coerceAtLeast(0L)))
+                    seekBy(SEEK_STEP_MS)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (controls && episodeIndex < line.episodes.lastIndex) {
+                        nextEpisodeFocusRequester.requestFocus()
+                    } else if (episodeIndex < line.episodes.lastIndex) {
                         showControlsForFiveSeconds()
+                        requestNextEpisodeFocus = true
                     }
                     true
                 }
@@ -232,7 +292,10 @@ fun PlayerScreen(
     ) {
         AndroidView(factory = { PlayerView(it).apply { this.player = player; useController = false } }, modifier = Modifier.fillMaxSize())
 
-        if (playerPhase.phase != PlayerPhase.READY) {
+        if (playerPhase.phase == PlayerPhase.INITIAL_LOADING ||
+            playerPhase.phase == PlayerPhase.ERROR ||
+            playerPhase.phase == PlayerPhase.TIMEOUT
+        ) {
             PlayerLoadOverlay(
                 state = playerPhase.phase,
                 progress = loadProgress,
@@ -245,7 +308,7 @@ fun PlayerScreen(
         if (controls) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .72f)).padding(24.dp)) {
                 Text("${movie.vod.vodName} · ${episode.title}", color = Color.White)
-                if (playerPhase.phase == PlayerPhase.READY) {
+                if (playerPhase.phase == PlayerPhase.READY || playerPhase.phase == PlayerPhase.BUFFERING) {
                     LinearProgressIndicator(progress = if (duration > 0) position.toFloat() / duration else 0f, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PlaybackStateIcon(isPlaying = playerPhase.isPlaying)
@@ -256,9 +319,24 @@ fun PlayerScreen(
                                 "下一集",
                                 {
                                     episodeIndex++
+                                    pendingSeekTargetMs = null
                                     controls = true
+                                    playerFocusRequester.requestFocus()
                                 },
-                                modifier = Modifier.padding(start = 8.dp)
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                                    .focusRequester(nextEpisodeFocusRequester)
+                                    .onFocusChanged { nextEpisodeFocused = it.isFocused }
+                                    .focusOrder { up = playerFocusRequester; left = playerFocusRequester },
+                                onKeyDown = { keyCode ->
+                                    when (keyCode) {
+                                        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                            playerFocusRequester.requestFocus()
+                                            true
+                                        }
+                                        else -> false
+                                    }
+                                }
                             )
                         }
                     }
@@ -311,6 +389,7 @@ private fun PlaybackStateIcon(isPlaying: Boolean) {
     }
 }
 
+private const val SEEK_STEP_MS = 5_000L
 private const val PLAYER_LOAD_TIMEOUT_MS = 20_000L
 private const val CONTROLS_HIDE_DELAY_MS = 5_000L
 

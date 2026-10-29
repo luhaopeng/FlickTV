@@ -5,6 +5,7 @@ import com.luhaopeng.flicktv.ui.focus.GridDirection
 import com.luhaopeng.flicktv.ui.focus.TvKeyCycle
 import com.luhaopeng.flicktv.ui.player.PlayerPhase
 import com.luhaopeng.flicktv.ui.player.PlayerPhaseState
+import com.luhaopeng.flicktv.ui.player.accumulateSeekTarget
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -100,6 +101,24 @@ class UiStateLogicTest {
         assertFalse(started.onError().isPlaying)
         assertEquals(PlayerPhase.TIMEOUT, started.onTimeout().phase)
         assertTrue(started.onTimeout().hasStartedPlayback)
+    }
+
+    @Test fun `连续三次快进应累计十五秒`() {
+        val first = accumulateSeekTarget(30_000L, null, 5_000L, 120_000L)
+        val second = accumulateSeekTarget(30_000L, first, 5_000L, 120_000L)
+        val third = accumulateSeekTarget(30_000L, second, 5_000L, 120_000L)
+        assertEquals(45_000L, third)
+    }
+
+    @Test fun `连续后退应基于待生效目标继续累计`() {
+        val first = accumulateSeekTarget(30_000L, null, -5_000L, 120_000L)
+        val second = accumulateSeekTarget(30_000L, first, -5_000L, 120_000L)
+        assertEquals(20_000L, second)
+    }
+
+    @Test fun `快进后退目标不能超出播放区间`() {
+        assertEquals(0L, accumulateSeekTarget(2_000L, null, -5_000L, 120_000L))
+        assertEquals(120_000L, accumulateSeekTarget(118_000L, null, 5_000L, 120_000L))
     }
 
     @Test fun `重新准备应重置所有播放阶段`() {

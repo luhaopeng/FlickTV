@@ -1,5 +1,6 @@
 package com.luhaopeng.flicktv.ui
 
+import com.luhaopeng.flicktv.data.db.watchedPercent
 import com.luhaopeng.flicktv.ui.focus.GridCursor
 import com.luhaopeng.flicktv.ui.focus.GridDirection
 import com.luhaopeng.flicktv.ui.focus.TvKeyCycle
@@ -10,6 +11,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UiStateLogicTest {
+    @Test fun `未观看或时长未知的分集不显示进度`() {
+        assertNull(watchedPercent(15_000L, 100_000L))
+        assertNull(watchedPercent(30_000L, 0L))
+    }
+
+    @Test fun `已观看分集显示钳制后的整数百分比`() {
+        assertEquals(25, watchedPercent(25_000L, 100_000L))
+        assertEquals(100, watchedPercent(120_000L, 100_000L))
+    }
+
     @Test fun `五列网格应按整行上下移动`() {
         val cursor = GridCursor(index = 7, itemCount = 20, columns = 5)
         assertEquals(2, cursor.move(GridDirection.UP))

@@ -22,7 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberImagePainter
+import com.luhaopeng.flicktv.data.db.PlayHistoryEntity
 import com.luhaopeng.flicktv.data.db.PlaybackStore
+import com.luhaopeng.flicktv.data.db.watchedPercent
 import com.luhaopeng.flicktv.data.model.*
 import com.luhaopeng.flicktv.ui.components.TvPill
 import com.luhaopeng.flicktv.ui.components.ensureItemVisible
@@ -43,6 +45,7 @@ fun DetailScreen(
     selected: SourceVod?,
     detail: VodItem?,
     playbackStore: PlaybackStore,
+    history: List<PlayHistoryEntity>,
     favorite: Boolean,
     onSource: (SourceVod) -> Unit,
     onFavorite: () -> Unit,
@@ -53,6 +56,7 @@ fun DetailScreen(
     val lines = remember(vod.vodPlayUrl, vod.vodPlayFrom) { PlayUrlParser.parse(vod) }
     var lineIndex by remember(vod.vodId) { mutableStateOf(0) }
     val line = lines.getOrNull(lineIndex)
+    val historyByKey = remember(history) { history.associateBy { it.progressKey } }
     val sourceState = rememberLazyListState()
     val lineState = rememberLazyListState()
     val episodeState = rememberLazyListState()
@@ -239,7 +243,9 @@ fun DetailScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     itemsIndexed(line.episodes) { index, episode ->
-                        val watched = playbackStore.hasProgress(vod.vodName, line.name, episode.title)
+                        val progress = historyByKey[
+                            playbackStore.key(vod.vodName, line.name, episode.title)
+                        ]?.let { watchedPercent(it.positionMs, it.durationMs) }
                         val selectedEpisodeTile = episodeGridFocused && index == selectedEpisode
                         Box(
                             Modifier
@@ -254,7 +260,11 @@ fun DetailScreen(
                                 .padding(horizontal = 18.dp, vertical = 12.dp)
                         ) {
                             Text(
-                                if (watched) "${episode.title} · 已看" else episode.title,
+                                when (progress) {
+                                    null -> episode.title
+                                    100 -> "${episode.title} · 已看完"
+                                    else -> "${episode.title} · $progress%"
+                                },
                                 color = if (selectedEpisodeTile) Color.White else Color(0xFFE6E6EA),
                                 fontWeight = if (selectedEpisodeTile) FontWeight.Bold else FontWeight.Normal
                             )

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
@@ -65,11 +66,22 @@ fun PlayerScreen(
     var requestNextEpisodeFocus by remember { mutableStateOf(false) }
     var nextEpisodeFocused by remember { mutableStateOf(false) }
     var consumedPlayerKeyCode by remember { mutableStateOf<Int?>(null) }
+    var showRebufferIndicator by remember { mutableStateOf(false) }
     val episode = line.episodes[episodeIndex]
 
     val player = remember {
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                MIN_BUFFER_MS,
+                MAX_BUFFER_MS,
+                BUFFER_FOR_PLAYBACK_MS,
+                BUFFER_AFTER_REBUFFER_MS
+            )
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .build()
         ExoPlayer.Builder(context)
             .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+            .setLoadControl(loadControl)
             .build()
     }
 
@@ -134,6 +146,14 @@ fun PlayerScreen(
         delay(CONTROLS_HIDE_DELAY_MS)
         if (controlsInteractionId == expectedId && playerPhase.phase == PlayerPhase.READY && !nextEpisodeFocused) controls = false
     }
+    LaunchedEffect(playerPhase.phase, playerPhase.hasStartedPlayback) {
+        if (playerPhase.phase == PlayerPhase.BUFFERING && playerPhase.hasStartedPlayback) {
+            delay(REBUFFER_INDICATOR_DELAY_MS)
+            if (playerPhase.phase == PlayerPhase.BUFFERING) showRebufferIndicator = true
+        } else {
+            showRebufferIndicator = false
+        }
+    }
     LaunchedEffect(loadAttemptId) {
         if (loadAttemptId <= 0L) return@LaunchedEffect
         val expectedAttempt = loadAttemptId
@@ -180,6 +200,7 @@ fun PlayerScreen(
                         controls = true
                     }
                     Player.STATE_READY -> {
+                        showRebufferIndicator = false
                         loadProgress = 1f
                         playerPhase = playerPhase.onReady()
                         if (playerPhase.phase == PlayerPhase.READY) {
@@ -213,6 +234,7 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                showRebufferIndicator = false
                 playerPhase = playerPhase.onError()
                 loadError = playerErrorMessage(error)
                 controls = true
@@ -305,6 +327,24 @@ fun PlayerScreen(
             )
         }
 
+        if (showRebufferIndicator) {
+            Row(
+                Modifier
+                    .align(Alignment.Center)
+                    .background(Color.Black.copy(alpha = .78f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 22.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    color = VodAccent,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.width(14.dp))
+                Text("网络缓冲中…", color = Color.White)
+            }
+        }
+
         if (controls) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .72f)).padding(24.dp)) {
                 Text("${movie.vod.vodName} · ${episode.title}", color = Color.White)
@@ -390,6 +430,11 @@ private fun PlaybackStateIcon(isPlaying: Boolean) {
 }
 
 private const val SEEK_STEP_MS = 5_000L
+private const val MIN_BUFFER_MS = 50_000
+private const val MAX_BUFFER_MS = 90_000
+private const val BUFFER_FOR_PLAYBACK_MS = 2_500
+private const val BUFFER_AFTER_REBUFFER_MS = 5_000
+private const val REBUFFER_INDICATOR_DELAY_MS = 400L
 private const val PLAYER_LOAD_TIMEOUT_MS = 20_000L
 private const val CONTROLS_HIDE_DELAY_MS = 5_000L
 

@@ -60,6 +60,7 @@ private fun VodBoxApp(viewModel: MainViewModel) {
                     selected = state.selectedSourceVod,
                     detail = state.detailVod,
                     playbackStore = app.playbackStore,
+                    history = history,
                     favorite = favorites.any { it.normalizedName == screen.movie.normalizedName },
                     onSource = viewModel::selectDetailSource,
                     onFavorite = { viewModel.toggleFavorite(screen.movie) },

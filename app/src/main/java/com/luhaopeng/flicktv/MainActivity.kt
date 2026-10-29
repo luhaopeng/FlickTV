@@ -28,6 +28,9 @@ import com.luhaopeng.flicktv.ui.search.SearchScreen
 import com.luhaopeng.flicktv.ui.settings.SettingsScreen
 import com.luhaopeng.flicktv.ui.theme.VodBackground
 import com.luhaopeng.flicktv.ui.theme.VodBoxTheme
+import com.luhaopeng.flicktv.ui.theme.VodDimens
+import com.luhaopeng.flicktv.ui.theme.VodTextPrimary
+import com.luhaopeng.flicktv.ui.theme.VodType
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -88,8 +91,21 @@ private fun MainShell(
     val contentEntryFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { homeTabFocus.requestFocus() }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(20.dp, 16.dp, 20.dp, 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("FlickTV", color = Color.White, fontSize = 24.sp, modifier = Modifier.padding(end = 28.dp))
+        Row(
+            Modifier.fillMaxWidth().padding(
+                VodDimens.ScreenHorizontal,
+                VodDimens.ScreenVertical,
+                VodDimens.ScreenHorizontal,
+                VodDimens.ItemGap
+            ),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Text(
+                "FlickTV",
+                color = VodTextPrimary,
+                fontSize = VodType.Brand,
+                modifier = Modifier.padding(end = 28.dp)
+            )
             LazyRow {
                 item {
                     TvPill(

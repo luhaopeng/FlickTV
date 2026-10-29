@@ -5,11 +5,11 @@ object PlayUrlParser {
     fun parse(vod: VodItem): List<PlayLine> {
         val urls = splitLines(vod.vodPlayUrl)
         val names = splitLines(vod.vodPlayFrom)
-        return urls.mapIndexedNotNull { lineIndex, lineText ->
+        return urls.mapIndexedNotNull lineLoop@ { lineIndex, lineText ->
             val episodes = lineText.split('#')
-                .mapIndexedNotNull { index, raw ->
+                .mapIndexedNotNull episodeLoop@ { index, raw ->
                     val token = raw.trim()
-                    if (token.isBlank()) return@mapIndexedNotNull null
+                    if (token.isBlank()) return@episodeLoop null
                     val dollar = token.indexOf('$')
                     if (dollar > 0 && dollar < token.lastIndex) {
                         Episode(token.substring(0, dollar).trim(), token.substring(dollar + 1).trim())

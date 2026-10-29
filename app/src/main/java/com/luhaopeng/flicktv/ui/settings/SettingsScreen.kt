@@ -25,6 +25,16 @@ import com.luhaopeng.flicktv.data.health.SourceHealth
 import com.luhaopeng.flicktv.data.model.SourceConfig
 import com.luhaopeng.flicktv.ui.components.TvPill
 import com.luhaopeng.flicktv.ui.components.ensureItemVisible
+import com.luhaopeng.flicktv.ui.theme.VodAccent
+import com.luhaopeng.flicktv.ui.theme.VodDimens
+import com.luhaopeng.flicktv.ui.theme.VodDisabled
+import com.luhaopeng.flicktv.ui.theme.VodFocus
+import com.luhaopeng.flicktv.ui.theme.VodSuccess
+import com.luhaopeng.flicktv.ui.theme.VodSurface
+import com.luhaopeng.flicktv.ui.theme.VodTextMuted
+import com.luhaopeng.flicktv.ui.theme.VodTextPrimary
+import com.luhaopeng.flicktv.ui.theme.VodTextSecondary
+import com.luhaopeng.flicktv.ui.theme.VodWarning
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -156,8 +166,8 @@ fun SettingsScreen(
                     }
                     Spacer(Modifier.height(14.dp))
                     Text(
-                        "填写可公开访问的 HTTP(S) JSON 地址。格式示例：\n{\"sources\":[{\"id\":\"demo\",\"name\":\"示例源\",\"api\":\"https://example.com/api.php/provide/vod\"}]}\n保存后返回设置页，再点“立即更新”拉取；失败时继续使用本地缓存或内置默认配置。",
-                        color = Color(0xFFA8A8B3),
+                        "远程 JSON 需包含 sources 数组，每项提供唯一 id、显示名称 name 和苹果 CMS 地址 api。完整示例见项目 README。保存后返回设置页，再点“立即更新”；失败时继续使用本地缓存或内置默认配置。",
+                        color = VodTextSecondary,
                         style = MaterialTheme.typography.body2
                     )
                 }
@@ -192,9 +202,9 @@ fun SettingsScreen(
                 up = tabFocusRequester
             })
         }
-        if (message.isNotBlank()) Text(message, color = Color(0xFFFFC66D), modifier = Modifier.padding(vertical = 8.dp))
-        if (checkMessage.isNotBlank()) Text(checkMessage, color = Color(0xFFFFC66D), modifier = Modifier.padding(vertical = 6.dp))
-        Text("源管理", color = Color.White, style = MaterialTheme.typography.h6, modifier = Modifier.padding(top = 10.dp))
+        if (message.isNotBlank()) Text(message, color = VodWarning, modifier = Modifier.padding(vertical = 8.dp))
+        if (checkMessage.isNotBlank()) Text(checkMessage, color = VodWarning, modifier = Modifier.padding(vertical = 6.dp))
+        Text("源管理", color = VodTextPrimary, style = MaterialTheme.typography.h6, modifier = Modifier.padding(top = 10.dp))
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
@@ -249,8 +259,8 @@ fun SettingsScreen(
                     Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .background(if (selected) Color(0xFF1E3532) else Color(0xFF17171F), RoundedCornerShape(10.dp))
-                        .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
+                        .background(if (selected) VodAccent.copy(alpha = .16f) else VodSurface, RoundedCornerShape(VodDimens.CardRadius))
+                        .border(if (selected) VodDimens.FocusBorder else 1.dp, if (selected) VodFocus else Color.Transparent, RoundedCornerShape(VodDimens.CardRadius))
                         .padding(horizontal = 18.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -258,19 +268,19 @@ fun SettingsScreen(
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 "● ${source.name}",
-                                color = if (state.autoDisabled || !state.manualEnabled) Color.Gray else Color(0xFF63E6A8)
+                                color = if (state.autoDisabled || !state.manualEnabled) VodDisabled else VodSuccess
                             )
                             Spacer(Modifier.width(14.dp))
                             Text(
                                 source.api,
-                                color = Color(0xFF7F8792),
+                                color = VodTextMuted,
                                 style = MaterialTheme.typography.caption,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
                         }
-                        Text(status, color = Color(0xFFA8A8B3))
+                        Text(status, color = VodTextSecondary)
                     }
                     Text(
                         when {
@@ -279,8 +289,11 @@ fun SettingsScreen(
                             state.autoDisabled || state.lastSuccessAt <= 0L -> "立即检测"
                             else -> "停用"
                         },
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                        color = if (selected) VodAccent else VodTextPrimary,
+                        modifier = Modifier
+                            .padding(horizontal = 10.dp)
+                            .background(VodAccent.copy(alpha = if (selected) .16f else .08f), RoundedCornerShape(VodDimens.PillRadius))
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                 }
             }

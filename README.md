@@ -66,13 +66,25 @@ sdk.dir=/path/to/Android/sdk
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Release 构建：
+Release 构建（启用 R8 与资源收缩）：
 
 ```bash
 ./gradlew assembleRelease
 ```
 
-当前仓库不包含 release keystore。请在自己的环境中配置签名后再分发 release APK。
+当前仓库不包含 release keystore，因此 `release` APK 默认不签名。请在自己的环境中配置签名后再分发。
+
+性能测量使用独立的 `benchmark` 变体：它继承 release 的 R8/资源收缩配置，以 debug key 签名，并追加 `.benchmark` 包名后缀，不会覆盖日常安装的 FlickTV。
+
+```bash
+./gradlew assembleBenchmark
+```
+
+可安装 APK：
+
+```text
+app/build/outputs/apk/benchmark/app-benchmark.apk
+```
 
 ## 安装到 Android TV / 投影仪
 
@@ -141,8 +153,10 @@ app/src/main/java/com/luhaopeng/flicktv/
 │   ├── model/          # 业务数据模型与播放地址解析
 │   ├── recommendation/ # 推荐请求与缓存
 │   └── repository/     # 多源业务仓库
+├── state/              # 可取消业务请求槽位
 └── ui/
     ├── components/     # TV 通用焦点与海报组件
+    ├── focus/          # 单焦点网格游标与按键周期规则
     ├── detail/
     ├── history/
     ├── home/
@@ -158,7 +172,17 @@ app/src/main/java/com/luhaopeng/flicktv/
 ./gradlew lintDebug testDebugUnitTest
 ```
 
-当前单元测试覆盖多源聚合、推荐标签、配置兼容、播放串解析和部分 m3u8 过滤规则。Android TV 遥控焦点与播放器端到端测试仍需继续补充。
+当前 JVM 测试覆盖多源聚合、推荐标签、配置兼容、播放串解析、m3u8 过滤、异步结果身份、TV 网格游标、按键周期与播放器阶段状态，共 44 个测试。Android TV 遥控焦点仍需结合真机回归。
+
+## Vidda 真机性能基线
+
+Compose 性能必须在真实设备的 release-derived 变体上测量；Debug 和模拟器数据只用于诊断，不作为结论。连接且仅连接一台 Vidda 后运行：
+
+```bash
+ITERATIONS=10 ./scripts/measure-vidda.sh
+```
+
+脚本会构建并安装 `benchmark` 变体，记录冷启动 `am start -W`、内存 `dumpsys meminfo` 和交互后的 `dumpsys gfxinfo`。报告写入 `build/device-metrics/`，每份报告包含变体、设备型号、Android/SDK 版本和迭代次数。
 
 ## 已知限制
 

@@ -25,7 +25,14 @@ import androidx.compose.ui.platform.LocalContext
 import coil.compose.rememberImagePainter
 import coil.request.ImageRequest
 import com.luhaopeng.flicktv.ui.theme.VodAccent
+import com.luhaopeng.flicktv.ui.theme.VodDimens
+import com.luhaopeng.flicktv.ui.theme.VodFocus
 import com.luhaopeng.flicktv.ui.theme.VodSurface
+import com.luhaopeng.flicktv.ui.theme.VodSurfaceRaised
+import com.luhaopeng.flicktv.ui.theme.VodTextMuted
+import com.luhaopeng.flicktv.ui.theme.VodTextPrimary
+import com.luhaopeng.flicktv.ui.theme.VodTextSecondary
+import com.luhaopeng.flicktv.ui.theme.VodType
 
 /** 通用 TV 焦点容器：聚焦时放大并显示白色边框。 */
 @Composable
@@ -44,9 +51,9 @@ fun TvFocusable(
     Box(
         modifier = modifier
             .graphicsLayer(scaleX = scale, scaleY = scale)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) VodAccent.copy(alpha = .22f) else VodSurface)
-            .border(if (focused) 2.dp else 1.dp, if (focused) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(VodDimens.PillRadius))
+            .background(if (selected) VodAccent.copy(alpha = .24f) else VodSurface)
+            .border(if (focused) VodDimens.FocusBorder else 1.dp, if (focused) VodFocus else Color.Transparent, RoundedCornerShape(VodDimens.PillRadius))
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocused?.invoke()
@@ -91,9 +98,11 @@ fun TvPill(
     TvFocusable(onClick, modifier = modifier, selected = selected, onFocused = onFocused, onKeyDown = onKeyDown, focusedScale = focusedScale) {
         Text(
             text = text,
-            color = Color.White,
-            fontSize = 15.sp,
+            color = VodTextPrimary,
+            fontSize = VodType.Body,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             // 自适应高度的普通胶囊视觉不变；当调用方指定固定高度时，文字在容器中真正居中。
             modifier = Modifier.align(androidx.compose.ui.Alignment.Center).padding(horizontal = 18.dp, vertical = 10.dp)
         )
@@ -116,16 +125,16 @@ fun PosterTile(
     Column(
         modifier
             .graphicsLayer(scaleX = scale, scaleY = scale)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(VodDimens.CardRadius))
             .background(VodSurface)
-            .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else Color.Transparent, RoundedCornerShape(10.dp))
+            .border(if (selected) VodDimens.FocusBorder else 1.dp, if (selected) VodFocus else Color.Transparent, RoundedCornerShape(VodDimens.CardRadius))
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(posterAspectRatio).background(Color(0xFF24242E))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(posterAspectRatio).background(VodSurfaceRaised)) {
             FallbackPosterImage(title = title, urls = posterCandidates.ifEmpty { listOfNotNull(poster.takeIf { it.isNotBlank() }) })
             if (badge.isNotBlank()) Text(badge, color = Color.Black, fontSize = 11.sp, modifier = Modifier.padding(6.dp).background(VodAccent, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp))
         }
-        Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp, 8.dp, 8.dp, 2.dp))
-        Text(subtitle, color = Color(0xFFA8A8B3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp, 0.dp, 8.dp, 8.dp))
+        Text(title, color = VodTextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp, 8.dp, 8.dp, 2.dp))
+        Text(subtitle, color = VodTextSecondary, fontSize = VodType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp, 0.dp, 8.dp, 8.dp))
     }
 }
 
@@ -141,8 +150,8 @@ private fun BoxScope.FallbackPosterImage(title: String, urls: List<String>) {
     if (current == null) {
         Text(
             text = title.take(4),
-            color = Color(0xFF8D8D99),
-            fontSize = 15.sp,
+            color = VodTextMuted,
+            fontSize = VodType.Body,
             modifier = Modifier.align(androidx.compose.ui.Alignment.Center).padding(12.dp)
         )
         return
@@ -178,7 +187,7 @@ fun PosterCard(
 ) {
     TvFocusable(onClick, modifier = modifier.then(focusModifier), onFocused = onFocused) {
         Column {
-            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).background(Color(0xFF24242E))) {
+            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).background(VodSurfaceRaised)) {
                 if (poster.isNotBlank()) {
                     Image(painter = rememberImagePainter(poster), contentDescription = title, modifier = Modifier.fillMaxSize())
                 }
@@ -186,8 +195,8 @@ fun PosterCard(
                     Text(badge, color = Color.Black, fontSize = 11.sp, modifier = Modifier.padding(6.dp).background(VodAccent, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp))
                 }
             }
-            Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp, 8.dp, 8.dp, 2.dp))
-            Text(subtitle, color = Color(0xFFA8A8B3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp, 0.dp, 8.dp, 8.dp))
+            Text(title, color = VodTextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp, 8.dp, 8.dp, 2.dp))
+            Text(subtitle, color = VodTextSecondary, fontSize = VodType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp, 0.dp, 8.dp, 8.dp))
         }
     }
 }

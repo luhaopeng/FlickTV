@@ -25,6 +25,8 @@ import com.luhaopeng.flicktv.data.model.MergedMovie
 import com.luhaopeng.flicktv.ui.components.PosterTile
 import com.luhaopeng.flicktv.ui.components.TvPill
 import com.luhaopeng.flicktv.ui.components.ensureItemVisible
+import com.luhaopeng.flicktv.ui.focus.GridCursor
+import com.luhaopeng.flicktv.ui.focus.GridDirection
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -212,30 +214,16 @@ fun SearchScreen(
                     // 方向键与确认键的完整按键周期都由本容器消费，只在首次 ACTION_DOWN 更新状态。
                     if (handledKey && native.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent true
                     if (!handledKey || native.repeatCount != 0) return@onPreviewKeyEvent handledKey
-                    val row = selectedIndex / columnCount
-                    val column = selectedIndex % columnCount
+                    val cursor = GridCursor(selectedIndex, results.size, columnCount)
                     when (native.keyCode) {
                         KeyEvent.KEYCODE_DPAD_UP -> {
-                            if (row == 0) {
-                                contentEntryFocusRequester.requestFocus()
-                            } else {
-                                selectResult(selectedIndex - columnCount)
-                            }
+                            cursor.move(GridDirection.UP)?.let(::selectResult)
+                                ?: contentEntryFocusRequester.requestFocus()
                             true
                         }
-                        KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            val target = selectedIndex + columnCount
-                            if (target < results.size) selectResult(target)
-                            true
-                        }
-                        KeyEvent.KEYCODE_DPAD_LEFT -> {
-                            if (column > 0) selectResult(selectedIndex - 1)
-                            true
-                        }
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            if (column < columnCount - 1 && selectedIndex + 1 < results.size) selectResult(selectedIndex + 1)
-                            true
-                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> { cursor.move(GridDirection.DOWN)?.let(::selectResult); true }
+                        KeyEvent.KEYCODE_DPAD_LEFT -> { cursor.move(GridDirection.LEFT)?.let(::selectResult); true }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> { cursor.move(GridDirection.RIGHT)?.let(::selectResult); true }
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
                         KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
                             results.getOrNull(selectedIndex)?.let(onMovieClick)

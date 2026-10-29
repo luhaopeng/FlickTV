@@ -28,6 +28,8 @@ import com.luhaopeng.flicktv.data.model.RecommendedMovie
 import com.luhaopeng.flicktv.data.recommendation.RecommendationTags
 import com.luhaopeng.flicktv.data.recommendation.RecommendationType
 import com.luhaopeng.flicktv.ui.components.PosterTile
+import com.luhaopeng.flicktv.ui.focus.GridCursor
+import com.luhaopeng.flicktv.ui.focus.GridDirection
 import com.luhaopeng.flicktv.ui.theme.VodAccent
 import kotlinx.coroutines.launch
 
@@ -116,23 +118,15 @@ fun RecommendationsScreen(
                         else -> false
                     }
                     RecommendationFocusLayer.GRID -> {
-                        val row = selectedIndex / columnCount
-                        val column = selectedIndex % columnCount
+                        val cursor = GridCursor(selectedIndex, movies.size, columnCount)
                         when (native.keyCode) {
                             KeyEvent.KEYCODE_DPAD_UP -> {
-                                if (row == 0) focusLayer = RecommendationFocusLayer.TAG else selectMovie(selectedIndex - columnCount)
+                                cursor.move(GridDirection.UP)?.let(::selectMovie) ?: run { focusLayer = RecommendationFocusLayer.TAG }
                                 true
                             }
-                            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                val target = selectedIndex + columnCount
-                                if (target < movies.size) selectMovie(target)
-                                true
-                            }
-                            KeyEvent.KEYCODE_DPAD_LEFT -> { if (column > 0) selectMovie(selectedIndex - 1); true }
-                            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                if (column < columnCount - 1 && selectedIndex + 1 < movies.size) selectMovie(selectedIndex + 1)
-                                true
-                            }
+                            KeyEvent.KEYCODE_DPAD_DOWN -> { cursor.move(GridDirection.DOWN)?.let(::selectMovie); true }
+                            KeyEvent.KEYCODE_DPAD_LEFT -> { cursor.move(GridDirection.LEFT)?.let(::selectMovie); true }
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> { cursor.move(GridDirection.RIGHT)?.let(::selectMovie); true }
                             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
                             KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
                                 movies.getOrNull(selectedIndex)?.let { onMovieClick(it.title) }

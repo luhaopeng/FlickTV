@@ -31,6 +31,8 @@ import com.luhaopeng.flicktv.data.model.VodCategory
 import com.luhaopeng.flicktv.data.model.VodItem
 import com.luhaopeng.flicktv.ui.components.PosterTile
 import com.luhaopeng.flicktv.ui.components.TvPill
+import com.luhaopeng.flicktv.ui.focus.GridCursor
+import com.luhaopeng.flicktv.ui.focus.GridDirection
 import com.luhaopeng.flicktv.ui.theme.VodAccent
 import com.luhaopeng.flicktv.ui.theme.VodSurface
 import kotlinx.coroutines.launch
@@ -296,19 +298,13 @@ fun CategoryScreen(
                         )
                         if (handled && native.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent true
                         if (!handled || native.repeatCount != 0) return@onPreviewKeyEvent handled
-                        val row = movieIndex / columnCount
-                        val column = movieIndex % columnCount
+                        val cursor = GridCursor(movieIndex, items.size, columnCount)
                         when (native.keyCode) {
-                            KeyEvent.KEYCODE_DPAD_LEFT -> if (column > 0) selectMovie(movieIndex - 1)
-                            KeyEvent.KEYCODE_DPAD_RIGHT -> if (column < columnCount - 1 && movieIndex + 1 < items.size) selectMovie(movieIndex + 1)
-                            KeyEvent.KEYCODE_DPAD_UP -> {
-                                if (row == 0) pagerFocusRequester.requestFocus()
-                                else selectMovie(movieIndex - columnCount)
-                            }
-                            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                val target = movieIndex + columnCount
-                                if (target < items.size) selectMovie(target)
-                            }
+                            KeyEvent.KEYCODE_DPAD_LEFT -> cursor.move(GridDirection.LEFT)?.let(::selectMovie)
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> cursor.move(GridDirection.RIGHT)?.let(::selectMovie)
+                            KeyEvent.KEYCODE_DPAD_UP -> cursor.move(GridDirection.UP)?.let(::selectMovie)
+                                ?: pagerFocusRequester.requestFocus()
+                            KeyEvent.KEYCODE_DPAD_DOWN -> cursor.move(GridDirection.DOWN)?.let(::selectMovie)
                             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
                             KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A -> items.getOrNull(movieIndex)?.let(onItem)
                         }

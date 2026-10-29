@@ -26,6 +26,8 @@ import com.luhaopeng.flicktv.data.db.PlaybackStore
 import com.luhaopeng.flicktv.data.model.*
 import com.luhaopeng.flicktv.ui.components.TvPill
 import com.luhaopeng.flicktv.ui.components.ensureItemVisible
+import com.luhaopeng.flicktv.ui.focus.GridCursor
+import com.luhaopeng.flicktv.ui.focus.GridDirection
 import com.luhaopeng.flicktv.ui.theme.VodAccent
 import com.luhaopeng.flicktv.ui.theme.VodSurface
 import kotlinx.coroutines.launch
@@ -215,19 +217,13 @@ fun DetailScreen(
                             native.keyCode == KeyEvent.KEYCODE_BUTTON_A
                         if (handled && native.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent true
                         if (!handled || native.repeatCount != 0) return@onPreviewKeyEvent handled
-                        val row = selectedEpisode / episodeColumns
-                        val column = selectedEpisode % episodeColumns
+                        val cursor = GridCursor(selectedEpisode, line.episodes.size, episodeColumns)
                         when (native.keyCode) {
-                            KeyEvent.KEYCODE_DPAD_UP -> {
-                                if (row == 0) lineFocusRequester.requestFocus()
-                                else selectEpisode(selectedEpisode - episodeColumns)
-                            }
-                            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                val target = selectedEpisode + episodeColumns
-                                if (target < line.episodes.size) selectEpisode(target)
-                            }
-                            KeyEvent.KEYCODE_DPAD_LEFT -> if (column > 0) selectEpisode(selectedEpisode - 1)
-                            KeyEvent.KEYCODE_DPAD_RIGHT -> if (column < episodeColumns - 1 && selectedEpisode + 1 < line.episodes.size) selectEpisode(selectedEpisode + 1)
+                            KeyEvent.KEYCODE_DPAD_UP -> cursor.move(GridDirection.UP)?.let(::selectEpisode)
+                                ?: lineFocusRequester.requestFocus()
+                            KeyEvent.KEYCODE_DPAD_DOWN -> cursor.move(GridDirection.DOWN)?.let(::selectEpisode)
+                            KeyEvent.KEYCODE_DPAD_LEFT -> cursor.move(GridDirection.LEFT)?.let(::selectEpisode)
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> cursor.move(GridDirection.RIGHT)?.let(::selectEpisode)
                             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
                             KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
                                 onPlay(active.copy(vod = vod), line, selectedEpisode)

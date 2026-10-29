@@ -8,7 +8,8 @@ import com.luhaopeng.flicktv.data.merge.MultiSourceMerger
 import com.luhaopeng.flicktv.data.model.*
 import com.luhaopeng.flicktv.data.recommendation.RecommendationTags
 import com.luhaopeng.flicktv.data.recommendation.RecommendationType
-import kotlinx.coroutines.Job
+import com.luhaopeng.flicktv.state.RequestJobs
+import com.luhaopeng.flicktv.state.RequestSlot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -77,12 +78,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val history = container.database.historyDao().observeAll().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val favorites = container.database.favoriteDao().observeAll().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    private var recommendationJob: Job? = null
-    private var searchJob: Job? = null
-    private var detailJob: Job? = null
-    private var categoriesJob: Job? = null
-    private var browseJob: Job? = null
-    private var remoteUpdateJob: Job? = null
+    private val requestJobs = RequestJobs(viewModelScope)
 
     init {
         loadRecommendations()
@@ -145,9 +141,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun loadRecommendations(force: Boolean = false) {
         val type = _state.value.recommendationType
         val tag = _state.value.recommendationTag
-        recommendationJob?.cancel()
         _state.update { it.copy(recommendationsLoading = true, recommendationsMessage = "") }
-        recommendationJob = viewModelScope.launch {
+        requestJobs.launch(RequestSlot.RECOMMENDATIONS) {
             val result = container.recommendationRepository.load(type, tag, force)
             // 快速切换分类时，旧请求不能覆盖新分类。
             if (_state.value.recommendationType != type || _state.value.recommendationTag != tag) return@launch
@@ -167,9 +162,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val originScreen = _state.value.screen
         val requestKeyword = keyword.trim()
         val sources = _state.value.config.sources
-        searchJob?.cancel()
         _state.update { it.copy(searchQuery = requestKeyword, searching = true, screen = AppScreen.Search, message = "") }
-        searchJob = viewModelScope.launch {
+        requestJobs.launch(RequestSlot.SEARCH) {
             val results = container.repository.searchAll(requestKeyword, sources)
             if (_state.value.searchQuery != requestKeyword) return@launch
             _state.update { it.copy(searchResults = results, searching = false, message = if (results.isEmpty()) "未找到可播放资源" else "") }
@@ -216,9 +210,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun loadDetail(sourceVod: SourceVod) {
-        detailJob?.cancel()
         _state.update { it.copy(detailLoading = true, detailVod = sourceVod.vod, message = "") }
-        detailJob = viewModelScope.launch {
+        requestJobs.launch(RequestSlot.DETAIL) {
             container.repository.detail(sourceVod)
                 .onSuccess { vod ->
                     if (_state.value.selectedSourceVod?.source?.id != sourceVod.source.id ||
@@ -236,8 +229,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun loadCategories(source: SourceConfig) {
-        categoriesJob?.cancel()
-        browseJob?.cancel()
+        requestJobs.cancel(RequestSlot.BROWSE)
         _state.update {
             it.copy(
                 browseSource = source,
@@ -252,7 +244,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 browseMessage = ""
             )
         }
-        categoriesJob = viewModelScope.launch {
+        requestJobs.launch(RequestSlot.CATEGORIES) {
             container.repository.categories(source)
                 .onSuccess { categories ->
                     // 快速切源时，旧源返回不能覆盖当前页面。
@@ -301,7 +293,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun browse(source: SourceConfig, category: VodCategory, page: Int) {
-        browseJob?.cancel()
         _state.update {
             it.copy(
                 browseSource = source,
@@ -315,7 +306,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 browseMessage = ""
             )
         }
-        browseJob = viewModelScope.launch {
+        requestJobs.launch(RequestSlot.BROWSE) {
             container.repository.browse(source, category.typeId, page)
                 .onSuccess { response ->
                     val current = _state.value
@@ -409,9 +400,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun sourceHealth(sourceId: String) = container.healthManager.state(sourceId)
 
     fun updateRemote(url: String) {
-        remoteUpdateJob?.cancel()
         _state.update { it.copy(remoteUrl = url, message = "正在更新配置…") }
-        remoteUpdateJob = viewModelScope.launch {
+        requestJobs.launch(RequestSlot.REMOTE_CONFIG) {
             val result = container.configManager.updateFromRemote(url)
             val finalMessage: String
             val config: VodConfig

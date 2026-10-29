@@ -1,0 +1,39 @@
+{
+  "sources": [
+    {
+      "id": "suoni",
+      "name": "索尼",
+      "api": "https://suoniapi.com/api.php/provide/vod"
+    },
+    {
+      "id": "haohua",
+      "name": "豪华",
+      "api": "https://hhzyapi.com/api.php/provide/vod"
+    },
+    {
+      "id": "bfzy",
+      "name": "暴风",
+      "api": "https://bfzyapi.com/api.php/provide/vod"
+    },
+    {
+      "id": "niuniu",
+      "name": "牛牛",
+      "api": "https://api.niuniuzy.me/api.php/provide/vod/"
+    },
+    {
+      "id": "lzi",
+      "name": "量子",
+      "api": "https://cj.lziapi.com/api.php/provide/vod"
+    },
+    {
+      "id": "hongniu",
+      "name": "红牛",
+      "api": "https://www.hongniuzy2.com/api.php/provide/vod"
+    },
+    {
+      "id": "feifan",
+      "name": "非凡",
+      "api": "https://api.ffzyapi.com/api.php/provide/vod"
+    }
+  ]
+}

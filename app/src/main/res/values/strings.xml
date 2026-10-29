@@ -1,0 +1,4 @@
+<resources>
+    <!-- 用户可见的应用名称；包名与内部兼容标识仍保留 com.luhaopeng.flicktv。 -->
+    <string name="app_name">FlickTV</string>
+</resources>

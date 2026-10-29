@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.VodBox" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#FFFFFF</item>
+        <item name="android:windowBackground">#0A0A0F</item>
+    </style>
+</resources>

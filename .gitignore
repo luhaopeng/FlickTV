@@ -1,0 +1,46 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+**/build/
+
+# Local Android SDK configuration
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing secrets
+*.jks
+*.keystore
+keystore.properties
+
+# Generated deliverables and temporary artifacts
+*.apk
+*.aab
+*.apks
+*.zip
+*.log
+*.tmp
+*.bak
+*.hprof
+*.prof
+*.trace
+*.xml.bak
+
+# Test screenshots and recordings
+*.webm
+*.mp4
+*-screenshot*.png
+*-screenshots*.png
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Tooling
+.kotlin/

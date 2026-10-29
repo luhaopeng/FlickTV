@@ -8,6 +8,7 @@ import com.luhaopeng.flicktv.data.merge.MultiSourceMerger
 import com.luhaopeng.flicktv.data.model.*
 import com.luhaopeng.flicktv.data.recommendation.RecommendationTags
 import com.luhaopeng.flicktv.data.recommendation.RecommendationType
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -16,7 +17,12 @@ sealed class AppScreen {
     object Home : AppScreen()
     object Search : AppScreen()
     data class Detail(val movie: MergedMovie) : AppScreen()
-    data class Player(val movie: SourceVod, val line: PlayLine, val episodeIndex: Int) : AppScreen()
+    data class Player(
+        val detailMovie: MergedMovie,
+        val movie: SourceVod,
+        val line: PlayLine,
+        val episodeIndex: Int
+    ) : AppScreen()
     object History : AppScreen()
     object Settings : AppScreen()
 }
@@ -70,6 +76,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<MainUiState> = _state.asStateFlow()
     val history = container.database.historyDao().observeAll().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val favorites = container.database.favoriteDao().observeAll().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private var recommendationJob: Job? = null
+    private var searchJob: Job? = null
+    private var detailJob: Job? = null
+    private var categoriesJob: Job? = null
+    private var browseJob: Job? = null
+    private var remoteUpdateJob: Job? = null
 
     init {
         loadRecommendations()
@@ -132,8 +145,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun loadRecommendations(force: Boolean = false) {
         val type = _state.value.recommendationType
         val tag = _state.value.recommendationTag
+        recommendationJob?.cancel()
         _state.update { it.copy(recommendationsLoading = true, recommendationsMessage = "") }
-        viewModelScope.launch {
+        recommendationJob = viewModelScope.launch {
             val result = container.recommendationRepository.load(type, tag, force)
             // 快速切换分类时，旧请求不能覆盖新分类。
             if (_state.value.recommendationType != type || _state.value.recommendationTag != tag) return@launch
@@ -151,9 +165,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (keyword.isBlank()) return
         // 推荐/收藏点击会经过一次后台聚合搜索；详情返回应回到真正的入口页，而不是中间搜索态。
         val originScreen = _state.value.screen
-        _state.update { it.copy(searchQuery = keyword, searching = true, screen = AppScreen.Search, message = "") }
-        viewModelScope.launch {
-            val results = container.repository.searchAll(keyword, _state.value.config.sources)
+        val requestKeyword = keyword.trim()
+        val sources = _state.value.config.sources
+        searchJob?.cancel()
+        _state.update { it.copy(searchQuery = requestKeyword, searching = true, screen = AppScreen.Search, message = "") }
+        searchJob = viewModelScope.launch {
+            val results = container.repository.searchAll(requestKeyword, sources)
+            if (_state.value.searchQuery != requestKeyword) return@launch
             _state.update { it.copy(searchResults = results, searching = false, message = if (results.isEmpty()) "未找到可播放资源" else "") }
             if (openSingle && results.isNotEmpty()) openDetailReturningTo(results.first(), originScreen)
         }
@@ -198,17 +216,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun loadDetail(sourceVod: SourceVod) {
+        detailJob?.cancel()
         _state.update { it.copy(detailLoading = true, detailVod = sourceVod.vod, message = "") }
-        viewModelScope.launch {
+        detailJob = viewModelScope.launch {
             container.repository.detail(sourceVod)
                 .onSuccess { vod ->
+                    if (_state.value.selectedSourceVod?.source?.id != sourceVod.source.id ||
+                        _state.value.selectedSourceVod?.vod?.vodId != sourceVod.vod.vodId
+                    ) return@onSuccess
                     _state.update { it.copy(detailVod = vod, selectedSourceVod = sourceVod.copy(vod = vod), detailLoading = false) }
                 }
-                .onFailure { error -> _state.update { it.copy(detailLoading = false, message = error.message ?: "详情加载失败") } }
+                .onFailure { error ->
+                    if (_state.value.selectedSourceVod?.source?.id != sourceVod.source.id ||
+                        _state.value.selectedSourceVod?.vod?.vodId != sourceVod.vod.vodId
+                    ) return@onFailure
+                    _state.update { it.copy(detailLoading = false, message = error.message ?: "详情加载失败") }
+                }
         }
     }
 
     fun loadCategories(source: SourceConfig) {
+        categoriesJob?.cancel()
+        browseJob?.cancel()
         _state.update {
             it.copy(
                 browseSource = source,
@@ -223,7 +252,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 browseMessage = ""
             )
         }
-        viewModelScope.launch {
+        categoriesJob = viewModelScope.launch {
             container.repository.categories(source)
                 .onSuccess { categories ->
                     // 快速切源时，旧源返回不能覆盖当前页面。
@@ -272,6 +301,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun browse(source: SourceConfig, category: VodCategory, page: Int) {
+        browseJob?.cancel()
         _state.update {
             it.copy(
                 browseSource = source,
@@ -285,7 +315,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 browseMessage = ""
             )
         }
-        viewModelScope.launch {
+        browseJob = viewModelScope.launch {
             container.repository.browse(source, category.typeId, page)
                 .onSuccess { response ->
                     val current = _state.value
@@ -379,8 +409,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun sourceHealth(sourceId: String) = container.healthManager.state(sourceId)
 
     fun updateRemote(url: String) {
+        remoteUpdateJob?.cancel()
         _state.update { it.copy(remoteUrl = url, message = "正在更新配置…") }
-        viewModelScope.launch {
+        remoteUpdateJob = viewModelScope.launch {
             val result = container.configManager.updateFromRemote(url)
             val finalMessage: String
             val config: VodConfig

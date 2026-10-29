@@ -16,6 +16,7 @@ import androidx.compose.ui.focus.focusOrder
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.luhaopeng.flicktv.data.merge.MultiSourceMerger
 import com.luhaopeng.flicktv.data.model.*
 import com.luhaopeng.flicktv.ui.components.TvPill
 import com.luhaopeng.flicktv.ui.detail.DetailScreen
@@ -46,7 +47,9 @@ private fun VodBoxApp(viewModel: MainViewModel) {
 
     Box(Modifier.fillMaxSize().background(VodBackground)) {
         when (val screen = state.screen) {
-            is AppScreen.Player -> PlayerScreen(screen.movie, screen.line, screen.episodeIndex, app.playbackStore) { viewModel.navigate(AppScreen.Detail(MergedMovie(screen.movie.vod.vodName, screen.movie.vod.vodName, screen.movie.vod.vodPic, listOf(screen.movie)))) }
+            is AppScreen.Player -> PlayerScreen(screen.movie, screen.line, screen.episodeIndex, app.playbackStore) {
+                viewModel.navigate(AppScreen.Detail(screen.detailMovie))
+            }
             is AppScreen.Detail -> {
                 BackHandler(onBack = viewModel::returnFromDetail)
                 DetailScreen(
@@ -57,7 +60,9 @@ private fun VodBoxApp(viewModel: MainViewModel) {
                     favorite = favorites.any { it.normalizedName == screen.movie.normalizedName },
                     onSource = viewModel::selectDetailSource,
                     onFavorite = { viewModel.toggleFavorite(screen.movie) },
-                    onPlay = { movie, line, index -> viewModel.navigate(AppScreen.Player(movie, line, index)) }
+                    onPlay = { movie, line, index ->
+                        viewModel.navigate(AppScreen.Player(screen.movie, movie, line, index))
+                    }
                 )
             }
             else -> MainShell(state, history, favorites, viewModel)
@@ -181,7 +186,21 @@ private fun MainShell(
                     onHistory = { item ->
                         val source = state.config.sources.firstOrNull { it.id == item.sourceId } ?: SourceConfig(item.sourceId, item.sourceName, "")
                         val vod = VodItem(vodId = item.vodId, vodName = item.movieName, vodPic = item.poster)
-                        viewModel.navigate(AppScreen.Player(SourceVod(source, vod), PlayLine(item.lineName, listOf(Episode(item.episodeTitle, item.episodeUrl))), 0))
+                        val sourceVod = SourceVod(source, vod)
+                        val detailMovie = MergedMovie(
+                            normalizedName = MultiSourceMerger.normalizeName(item.movieName),
+                            displayName = item.movieName,
+                            poster = item.poster,
+                            sources = listOf(sourceVod)
+                        )
+                        viewModel.navigate(
+                            AppScreen.Player(
+                                detailMovie,
+                                sourceVod,
+                                PlayLine(item.lineName, listOf(Episode(item.episodeTitle, item.episodeUrl))),
+                                0
+                            )
+                        )
                     },
                     onFavorite = { viewModel.search(it.movieName, openSingle = true) }
                 )

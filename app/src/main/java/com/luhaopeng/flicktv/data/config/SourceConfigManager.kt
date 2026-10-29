@@ -1,6 +1,7 @@
 package com.luhaopeng.flicktv.data.config
 
 import android.content.Context
+import android.util.AtomicFile
 import com.google.gson.Gson
 import com.luhaopeng.flicktv.data.api.NetworkModule
 import com.luhaopeng.flicktv.data.model.VodConfig
@@ -17,6 +18,7 @@ class SourceConfigManager(private val context: Context) {
     private val gson = Gson()
     private val prefs = context.getSharedPreferences("source_config", Context.MODE_PRIVATE)
     private val cacheFile = File(context.filesDir, "sources_cache.json")
+    private val atomicCache = AtomicFile(cacheFile)
 
     fun load(): VodConfig {
         val cached = runCatching { cacheFile.takeIf { it.exists() }?.readText() }
@@ -45,10 +47,14 @@ class SourceConfigManager(private val context: Context) {
                 check(it.isSuccessful) { "HTTP ${it.code}" }
                 val body = it.body?.string().orEmpty()
                 val config = requireNotNull(parseAndValidate(body)) { "远程 JSON 格式不合法" }
-                val temp = File(context.filesDir, "sources_cache.tmp")
-                temp.writeText(body)
-                if (cacheFile.exists()) cacheFile.delete()
-                check(temp.renameTo(cacheFile)) { "配置缓存写入失败" }
+                val output = atomicCache.startWrite()
+                try {
+                    output.write(body.toByteArray(Charsets.UTF_8))
+                    atomicCache.finishWrite(output)
+                } catch (error: Throwable) {
+                    atomicCache.failWrite(output)
+                    throw error
+                }
                 config
             }
         }

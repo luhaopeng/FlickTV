@@ -14,6 +14,11 @@ class PlaybackStore(context: Context, private val historyDao: HistoryDao) {
 
     fun loadPosition(key: String): Long = prefs.getLong(key, 0L)
 
+    fun savePositionNow(movieName: String, lineName: String, episodeTitle: String, positionMs: Long) {
+        if (positionMs <= 0L) return
+        prefs.edit().putLong(key(movieName, lineName, episodeTitle), positionMs).apply()
+    }
+
     suspend fun save(
         movie: SourceVod,
         lineName: String,

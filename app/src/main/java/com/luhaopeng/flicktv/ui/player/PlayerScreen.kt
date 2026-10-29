@@ -53,6 +53,7 @@ fun PlayerScreen(
     var position by remember { mutableStateOf(0L) }
     var duration by remember { mutableStateOf(0L) }
     var isPlaying by remember { mutableStateOf(false) }
+    var hasStartedPlayback by remember { mutableStateOf(false) }
     var nextHint by remember { mutableStateOf(false) }
     var loadState by remember { mutableStateOf(PlayerLoadState.LOADING) }
     var loadProgress by remember { mutableStateOf(0f) }
@@ -81,6 +82,8 @@ fun PlayerScreen(
     }
 
     fun prepareCurrent() {
+        hasStartedPlayback = false
+        isPlaying = false
         beginLoading()
         player.stop()
         val upstream = DefaultHttpDataSource.Factory().setUserAgent(NetworkModule.USER_AGENT).setAllowCrossProtocolRedirects(true)
@@ -133,7 +136,10 @@ fun PlayerScreen(
     LaunchedEffect(player, episodeIndex) {
         while (isActive) {
             delay(5_000L)
-            store.save(movie, line.name, episode, player.currentPosition, player.duration.coerceAtLeast(0L))
+            val currentPosition = player.currentPosition.coerceAtLeast(0L)
+            if (hasStartedPlayback && currentPosition > 0L) {
+                store.save(movie, line.name, episode, currentPosition, player.duration.coerceAtLeast(0L))
+            }
         }
     }
     DisposableEffect(player) {
@@ -141,22 +147,33 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(state: Int) {
                 when (state) {
                     Player.STATE_BUFFERING -> {
-                        if (loadState != PlayerLoadState.LOADING) beginLoading()
-                        controls = true
+                        if (hasStartedPlayback) {
+                            loadState = PlayerLoadState.BUFFERING
+                            loadError = ""
+                            controls = true
+                        } else if (loadState != PlayerLoadState.LOADING) {
+                            beginLoading()
+                        }
                     }
                     Player.STATE_READY -> {
-                        // READY 只代表已具备播放条件；实际开始播放前仍保留加载层和控制器。
                         loadProgress = 1f
+                        if (hasStartedPlayback) {
+                            loadError = ""
+                            loadState = PlayerLoadState.READY
+                            controls = true
+                        }
                     }
                     Player.STATE_ENDED -> {
                         if (episodeIndex < line.episodes.lastIndex) episodeIndex++
                     }
+                    Player.STATE_IDLE -> Unit
                 }
             }
 
             override fun onIsPlayingChanged(playerIsPlaying: Boolean) {
                 isPlaying = playerIsPlaying
                 if (playerIsPlaying) {
+                    hasStartedPlayback = true
                     loadProgress = 1f
                     loadError = ""
                     loadState = PlayerLoadState.READY
@@ -166,6 +183,7 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                isPlaying = false
                 loadError = playerErrorMessage(error)
                 loadState = PlayerLoadState.ERROR
                 controls = true
@@ -173,6 +191,12 @@ fun PlayerScreen(
         }
         player.addListener(listener)
         onDispose {
+            store.savePositionNow(
+                movie.vod.vodName,
+                line.name,
+                episode.title,
+                player.currentPosition.coerceAtLeast(0L)
+            )
             player.removeListener(listener)
             player.release()
         }
@@ -252,6 +276,7 @@ fun PlayerScreen(
                 } else {
                     val statusText = when (loadState) {
                         PlayerLoadState.LOADING -> "正在加载资源 · ${(loadProgress * 100).toInt()}%"
+                        PlayerLoadState.BUFFERING -> "正在缓冲…"
                         PlayerLoadState.TIMEOUT -> "加载超时 · 按 OK 重试"
                         PlayerLoadState.ERROR -> "加载失败 · 按 OK 重试"
                         PlayerLoadState.READY -> ""
@@ -297,7 +322,7 @@ private fun PlaybackStateIcon(isPlaying: Boolean) {
     }
 }
 
-private enum class PlayerLoadState { LOADING, READY, ERROR, TIMEOUT }
+private enum class PlayerLoadState { LOADING, BUFFERING, READY, ERROR, TIMEOUT }
 
 private const val PLAYER_LOAD_TIMEOUT_MS = 20_000L
 private const val CONTROLS_HIDE_DELAY_MS = 5_000L
@@ -320,6 +345,7 @@ private fun PlayerLoadOverlay(
     ) {
         val title = when (state) {
             PlayerLoadState.LOADING -> "正在加载视频资源"
+            PlayerLoadState.BUFFERING -> "网络缓冲中"
             PlayerLoadState.TIMEOUT -> "资源加载超时"
             PlayerLoadState.ERROR -> "资源加载失败"
             PlayerLoadState.READY -> ""
@@ -338,6 +364,7 @@ private fun PlayerLoadOverlay(
                 "${(progress * 100).toInt()}% · 最长等待 ${timeoutSeconds} 秒",
                 color = Color.White.copy(alpha = .76f)
             )
+            PlayerLoadState.BUFFERING -> Text("正在恢复播放，请稍候", color = Color.White.copy(alpha = .76f))
             PlayerLoadState.ERROR, PlayerLoadState.TIMEOUT -> {
                 Text(error.ifBlank { "当前资源无法播放" }, color = Color(0xFFFFB36B))
                 Spacer(Modifier.height(8.dp))

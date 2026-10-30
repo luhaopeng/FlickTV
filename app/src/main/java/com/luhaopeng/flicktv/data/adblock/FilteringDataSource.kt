@@ -18,9 +18,10 @@ class FilteringDataSource(
     private var upstream: DataSource? = null
     private var playlistStream: ByteArrayInputStream? = null
     private var openedUri: Uri? = null
+    private val transferListeners = mutableListOf<TransferListener>()
 
     override fun addTransferListener(transferListener: TransferListener) {
-        upstreamFactory.createDataSource().addTransferListener(transferListener)
+        if (transferListener !in transferListeners) transferListeners += transferListener
     }
 
     override fun open(dataSpec: DataSpec): Long {
@@ -28,7 +29,7 @@ class FilteringDataSource(
         val url = dataSpec.uri.toString()
         if (url.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) {
             return runCatching {
-                NetworkModule.okHttp.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                NetworkModule.playbackOkHttp.newCall(Request.Builder().url(url).build()).execute().use { response ->
                     check(response.isSuccessful)
                     val original = response.body?.string().orEmpty()
                     val clean = M3u8AdFilter.filter(original, url).text.toByteArray(Charsets.UTF_8)
@@ -43,7 +44,9 @@ class FilteringDataSource(
     }
 
     private fun openUpstream(dataSpec: DataSpec): Long {
-        upstream = upstreamFactory.createDataSource()
+        upstream = upstreamFactory.createDataSource().also { source ->
+            transferListeners.forEach(source::addTransferListener)
+        }
         return upstream!!.open(dataSpec)
     }
 

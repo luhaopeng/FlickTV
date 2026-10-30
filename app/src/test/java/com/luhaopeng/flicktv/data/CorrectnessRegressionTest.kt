@@ -2,6 +2,7 @@ package com.luhaopeng.flicktv.data
 
 import com.luhaopeng.flicktv.AppScreen
 import com.luhaopeng.flicktv.data.adblock.M3u8AdFilter
+import com.luhaopeng.flicktv.data.api.NetworkModule
 import com.luhaopeng.flicktv.data.health.SourceHealth
 import com.luhaopeng.flicktv.data.merge.MultiSourceMerger
 import com.luhaopeng.flicktv.data.model.*
@@ -153,6 +154,14 @@ https://cdn.example/video.ts"""
         val result = M3u8AdFilter.filter(input, "https://host/path/index.m3u8")
         assertEquals(1, result.removedSegments)
         assertTrue(result.text.contains("https://host/path/main.ts"))
+    }
+
+    @Test fun `播放清单客户端不应继承业务接口的五秒总超时`() {
+        assertEquals(5_000L, NetworkModule.okHttp.callTimeoutMillis.toLong())
+        assertEquals(0L, NetworkModule.playbackOkHttp.callTimeoutMillis.toLong())
+        assertEquals(12_000L, NetworkModule.playbackOkHttp.connectTimeoutMillis.toLong())
+        assertEquals(20_000L, NetworkModule.playbackOkHttp.readTimeoutMillis.toLong())
+        assertTrue(NetworkModule.playbackOkHttp.retryOnConnectionFailure)
     }
 
     @Test fun `播放器页面应保留完整详情影片上下文`() {

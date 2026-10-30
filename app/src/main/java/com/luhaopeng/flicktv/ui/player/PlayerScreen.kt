@@ -29,6 +29,7 @@ import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.source.hls.HlsMediaSource
 import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
+import com.google.android.exoplayer2.upstream.DefaultLoadErrorHandlingPolicy
 import com.luhaopeng.flicktv.data.adblock.FilteringDataSource
 import com.luhaopeng.flicktv.data.api.NetworkModule
 import com.luhaopeng.flicktv.data.db.PlaybackStore
@@ -78,6 +79,7 @@ fun PlayerScreen(
                 BUFFER_AFTER_REBUFFER_MS
             )
             .setPrioritizeTimeOverSizeThresholds(false)
+            .setBackBuffer(BACK_BUFFER_MS, true)
             .build()
         ExoPlayer.Builder(context)
             .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
@@ -103,12 +105,20 @@ fun PlayerScreen(
         beginLoading()
         pendingSeekTargetMs = null
         player.stop()
-        val upstream = DefaultHttpDataSource.Factory().setUserAgent(NetworkModule.USER_AGENT).setAllowCrossProtocolRedirects(true)
+        val upstream = DefaultHttpDataSource.Factory()
+            .setUserAgent(NetworkModule.USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(PLAYBACK_CONNECT_TIMEOUT_MS)
+            .setReadTimeoutMs(PLAYBACK_READ_TIMEOUT_MS)
         val filtering = FilteringDataSource.Factory(upstream)
-        val source = HlsMediaSource.Factory(filtering).createMediaSource(MediaItem.fromUri(episode.url))
-        player.setMediaSource(source)
+        val source = HlsMediaSource.Factory(filtering)
+            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(HLS_MIN_RETRY_COUNT))
+            .createMediaSource(MediaItem.fromUri(episode.url))
+        val resumePosition = validResumePosition(
+            store.loadPosition(store.key(movie.vod.vodName, line.name, episode.title))
+        )
+        player.setMediaSource(source, resumePosition)
         player.prepare()
-        player.seekTo(store.loadPosition(store.key(movie.vod.vodName, line.name, episode.title)))
         player.playWhenReady = true
     }
 
@@ -432,8 +442,12 @@ private fun PlaybackStateIcon(isPlaying: Boolean) {
 private const val SEEK_STEP_MS = 5_000L
 private const val MIN_BUFFER_MS = 50_000
 private const val MAX_BUFFER_MS = 90_000
+private const val BACK_BUFFER_MS = 15_000
 private const val BUFFER_FOR_PLAYBACK_MS = 2_500
-private const val BUFFER_AFTER_REBUFFER_MS = 5_000
+private const val BUFFER_AFTER_REBUFFER_MS = 12_000
+private const val PLAYBACK_CONNECT_TIMEOUT_MS = 12_000
+private const val PLAYBACK_READ_TIMEOUT_MS = 20_000
+private const val HLS_MIN_RETRY_COUNT = 6
 private const val REBUFFER_INDICATOR_DELAY_MS = 400L
 private const val PLAYER_LOAD_TIMEOUT_MS = 20_000L
 private const val CONTROLS_HIDE_DELAY_MS = 5_000L

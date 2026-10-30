@@ -7,10 +7,17 @@ import com.luhaopeng.flicktv.ui.focus.TvKeyCycle
 import com.luhaopeng.flicktv.ui.player.PlayerPhase
 import com.luhaopeng.flicktv.ui.player.PlayerPhaseState
 import com.luhaopeng.flicktv.ui.player.accumulateSeekTarget
+import com.luhaopeng.flicktv.ui.player.validResumePosition
 import org.junit.Assert.*
 import org.junit.Test
 
 class UiStateLogicTest {
+    @Test fun `已有播放进度应作为再次打开的起播位置`() {
+        assertEquals(68_000L, validResumePosition(68_000L))
+        assertEquals(0L, validResumePosition(0L))
+        assertEquals(100_000L, validResumePosition(120_000L, 100_000L))
+    }
+
     @Test fun `未观看或时长未知的分集不显示进度`() {
         assertNull(watchedPercent(15_000L, 100_000L))
         assertNull(watchedPercent(30_000L, 0L))
